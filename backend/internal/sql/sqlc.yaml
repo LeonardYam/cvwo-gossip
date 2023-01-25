@@ -1,0 +1,13 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "query.sql"
+    schema: "schema.sql"
+    gen:
+      go:
+        package: "database"
+        out: "../database"
+        overrides: 
+          - db_type: "serial"
+            nullable: true
+            go_type: "github.com/guregu/null.Int"
