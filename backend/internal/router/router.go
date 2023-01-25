@@ -10,6 +10,7 @@ import (
 	"github.com/LeonardYam/cvwo-gossip/backend/internal/routes"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/joho/godotenv"
 
@@ -36,6 +37,16 @@ func SetUp() chi.Router {
 
 	// Pass dependencies to a Server struct
 	server := routes.NewServer(queries, ctx, tokenAuth)
+
+	// Basic CORS middleware from go-chi	
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	  }))
 
 	// Use standard logger provided by go-chi
 	r.Use(middleware.Logger)

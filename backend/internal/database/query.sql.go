@@ -95,9 +95,10 @@ func (q *Queries) CreateThread(ctx context.Context, arg CreateThreadParams) (Thr
 	return i, err
 }
 
-const createUser = `-- name: CreateUser :exec
+const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, pw) 
 VALUES ($1, $2)
+RETURNING username
 `
 
 type CreateUserParams struct {
@@ -105,9 +106,11 @@ type CreateUserParams struct {
 	Pw       string
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.ExecContext(ctx, createUser, arg.Username, arg.Pw)
-	return err
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, createUser, arg.Username, arg.Pw)
+	var username string
+	err := row.Scan(&username)
+	return username, err
 }
 
 const getAllThreads = `-- name: GetAllThreads :many
@@ -141,6 +144,25 @@ func (q *Queries) GetAllThreads(ctx context.Context) ([]Thread, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const getCommentById = `-- name: GetCommentById :one
+SELECT id, commenttext, postedon, threadid, parentcomment, author FROM comments
+WHERE id = $1
+`
+
+func (q *Queries) GetCommentById(ctx context.Context, id int32) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, getCommentById, id)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.Commenttext,
+		&i.Postedon,
+		&i.Threadid,
+		&i.Parentcomment,
+		&i.Author,
+	)
+	return i, err
 }
 
 const getCommentsByThread = `-- name: GetCommentsByThread :many
@@ -224,6 +246,52 @@ func (q *Queries) GetThreadById(ctx context.Context, id int32) (Thread, error) {
 		&i.Author,
 	)
 	return i, err
+}
+
+const getThreadsByTag = `-- name: GetThreadsByTag :many
+SELECT id, title, threadtext, postedon, author, threadid, tagtext FROM threads t, threads_tags tags
+WHERE t.id = tags.threadId AND tags.tagText = $1
+`
+
+type GetThreadsByTagRow struct {
+	ID         int32
+	Title      string
+	Threadtext string
+	Postedon   time.Time
+	Author     string
+	Threadid   int32
+	Tagtext    string
+}
+
+func (q *Queries) GetThreadsByTag(ctx context.Context, tagtext string) ([]GetThreadsByTagRow, error) {
+	rows, err := q.db.QueryContext(ctx, getThreadsByTag, tagtext)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetThreadsByTagRow
+	for rows.Next() {
+		var i GetThreadsByTagRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Threadtext,
+			&i.Postedon,
+			&i.Author,
+			&i.Threadid,
+			&i.Tagtext,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUser = `-- name: GetUser :one

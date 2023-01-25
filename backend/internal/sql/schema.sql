@@ -23,5 +23,6 @@ CREATE TABLE comments (
 -- Store relation between threads and tags
 CREATE TABLE threads_tags (
     threadId serial REFERENCES threads (id) NOT NULL,
-    tagText text NOT NULL
+    tagText text NOT NULL,
+    PRIMARY KEY (threadId, tagText)
 );

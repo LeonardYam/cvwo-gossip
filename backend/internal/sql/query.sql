@@ -10,6 +10,14 @@ SELECT * FROM comments
 WHERE threadId = $1
 ORDER BY id ASC;
 
+-- name: GetThreadsByTag :many
+SELECT * FROM threads t, threads_tags tags
+WHERE t.id = tags.threadId AND tags.tagText = $1;
+
+-- name: GetCommentById :one
+SELECT * FROM comments
+WHERE id = $1;
+
 -- name: CreateThread :one
 INSERT INTO threads (title, threadText, postedOn, author) 
 VALUES ($1, $2, $3, $4)
@@ -34,9 +42,10 @@ RETURNING *;
 SELECT username FROM users
 WHERE username = $1;
 
--- name: CreateUser :exec
+-- name: CreateUser :one
 INSERT INTO users (username, pw) 
-VALUES ($1, $2);
+VALUES ($1, $2)
+RETURNING username;
 
 -- name: LoginUser :one
 SELECT username FROM users

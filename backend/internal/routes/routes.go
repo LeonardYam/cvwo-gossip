@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/LeonardYam/cvwo-gossip/backend/internal/database"
 	"github.com/go-chi/chi/v5"
@@ -28,7 +29,9 @@ func (s *Server) GetAPIRoutes() func(r chi.Router) {
 		r.Group(func (r chi.Router) {
 			r.Get("/threads", s.getAllThreads())
 			r.Get("/threads/{id}", s.getThreadById())
-			r.Get("/comments/{threadId}", s.getCommentsByThread())
+			r.Get("/tags/{tag}", s.getThreadsByTag())
+			r.Get("/comments/t-{threadId}", s.getCommentsByThread())
+			r.Get("/comments/c-{commentId}", s.getCommentById())
 			r.Post("/login", s.login())
 			r.Post("/user", s.createUser())		
 		})
@@ -40,7 +43,7 @@ func (s *Server) GetAPIRoutes() func(r chi.Router) {
 
 			// Handle valid / invalid tokens with provided middleware
 			r.Use(jwtauth.Authenticator)
-
+			r.Post("/tags", s.createTagThread())
 			r.Post("/threads", s.createThread())
 			r.Post("/comments", s.createComment())
 		})
@@ -77,6 +80,43 @@ func (s *Server) getThreadById() http.HandlerFunc {
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(thread)
+		}
+	}
+}
+
+func (s *Server) getThreadsByTag() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tag := chi.URLParam(r, "tag")
+		tag = strings.ToLower(tag)
+		threads, err := s.queries.GetThreadsByTag(s.ctx, tag);
+		
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(threads)
+		}
+	}
+}
+
+func (s *Server) createTagThread() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var tagThread database.CreateTagThreadParams
+
+		// Parse POST request body
+		if err := json.NewDecoder(r.Body).Decode(&tagThread); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		lowercase := strings.ToLower(tagThread.Tagtext)
+		tagThread.Tagtext = lowercase
+
+		newTagThread, err := s.queries.CreateTagThread(s.ctx, tagThread)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(newTagThread)
 		}
 	}
 }
@@ -133,6 +173,28 @@ func (s *Server) getCommentsByThread() http.HandlerFunc {
 	}
 }
 
+func (s *Server) getCommentById() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idParam, err := strconv.ParseInt(chi.URLParam(r, "commentId"), 10, 32)
+		
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		id := int32(idParam)
+
+		comment, err := s.queries.GetCommentById(s.ctx, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(comment)
+		}
+	}
+}
+
+
 func (s *Server) createComment() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var comment database.CreateCommentParams
@@ -172,11 +234,11 @@ func (s *Server) login() http.HandlerFunc {
 			return
 		}
 		
-		existingUser, _ := s.queries.LoginUser(s.ctx, user)
-		if existingUser == "" { // User does not exist
+		existingUser, err := s.queries.LoginUser(s.ctx, user)
+		if err != nil { // User does not exist
 			http.Error(w, "No such user exists!", http.StatusBadRequest)
 		} else {
-			_, tokenString, _ := s.tokenAuth.Encode(map[string]interface{}{"user": existingUser})
+			_, tokenString, _ := s.tokenAuth.Encode(map[string]interface{}{"user":existingUser})
 			w.Write([]byte(tokenString))
 		}
 	}	
@@ -192,8 +254,8 @@ func (s *Server) createUser() http.HandlerFunc {
 		}
 
 		// Check for existing user
-		existing, _ := s.queries.GetUser(s.ctx, user.Username)
-		if existing != "" { // User exists
+		_, err := s.queries.GetUser(s.ctx, user.Username)
+		if err == nil { // User exists
 			http.Error(w, "Username already exists!", http.StatusBadRequest)
 		} else {
 			s.queries.CreateUser(s.ctx, user)
