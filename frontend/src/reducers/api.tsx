@@ -2,13 +2,10 @@
 import { FetchBaseQueryError, createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { Thread, ThreadWithComments, Comment, LoginUser, NewComment, NewThread, TagThread } from '../app/types'
 import { RootState } from '../app/store'
-import * as dotenv from 'dotenv'
-
-dotenv.config()
 
 export const apiSlice = createApi({
     baseQuery: fetchBaseQuery({
-        baseUrl: process.env.BACKEND_URI,
+        baseUrl: process.env.REACT_APP_BACKEND_URI,
         prepareHeaders: (headers, { getState }) => { // Set JWT token for authentication
             const token = (getState() as RootState).auth.token
             if (token) { // if token exists
